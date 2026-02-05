@@ -12,18 +12,12 @@ import CreateNewPassword from './components/CreateNewPassword';
 function App() {
   const [currentView, setCurrentView] = useState('login'); 
 
-  // --- FLOW HANDLERS ---
-
-  // 1. Called when user clicks "Login" button with correct password
   const handleLoginSuccess = () => {
-    // Move to the 2FA Check (Blue Checkmark Screen)
     setCurrentView('verify-identity');
   };
 
-  // 2. Called when the 2FA is correct
   const handleIdentityVerified = () => {
     alert("LOGIN SUCCESSFUL! Redirecting to Dashboard...");
-    // In a real app, this is where you redirect to the main page
     // setCurrentView('dashboard'); 
   };
 
@@ -41,7 +35,7 @@ function App() {
           />
         )}
 
-        {/* === LOGIN FLOW: 2FA SCREEN (Blue Checkmark) === */}
+        {/* === LOGIN FLOW: 2FA SCREEN === */}
         {currentView === 'verify-identity' && (
           <VerifyIdentity 
             onBackToLoginClick={() => setCurrentView('login')}
@@ -49,20 +43,20 @@ function App() {
           />
         )}
 
-
         {/* ============================================== */}
-        {/* === FORGOT PASSWORD FLOW (Completely separate) === */}
+        {/* === FORGOT PASSWORD FLOW === */}
         {/* ============================================== */}
 
         {/* Step 1: Enter Employee ID */}
         {currentView === 'forgot-password' && (
           <ForgotPassword 
             onBackToLoginClick={() => setCurrentView('login')} 
-            onCodeSent={() => setCurrentView('reset-otp')} 
+            // THIS IS THE FIX: Ensuring the name matches what we call in ForgotPassword.jsx
+            onOtpSent={() => setCurrentView('reset-otp')} 
           />
         )}
 
-        {/* Step 2: OTP for Reset (Lock Icon) */}
+        {/* Step 2: OTP for Reset */}
         {currentView === 'reset-otp' && (
           <OtpVerification 
             onBackToLoginClick={() => setCurrentView('login')}

@@ -1,84 +1,173 @@
-import { useState, useRef } from 'react';
-
-// The Blue Checkmark Icon from the image
-const CheckIcon = () => (
-  <svg width="60" height="60" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="header-icon-svg">
-    <circle cx="30" cy="30" r="30" fill="white"/>
-    <path d="M30 5C16.193 5 5 16.193 5 30C5 43.807 16.193 55 30 55C43.807 55 55 43.807 55 30C55 16.193 43.807 5 30 5ZM25.333 42.5L14.5 31.666L18.041 28.125L25.333 35.417L41.958 18.792L45.5 22.333L25.333 42.5Z" fill="#1e90ff"/>
-  </svg>
-);
+import { useState, useEffect, useRef } from 'react';
+// import checkIcon from '../assets/check.png'; 
 
 function VerifyIdentity({ onBackToLoginClick, onVerifySubmit }) {
-  // State to store the 6 digits
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [status, setStatus] = useState('Sending verification code...');
+  const [userEmail, setUserEmail] = useState('');
   
-  // Refs to manage focus for the 6 inputs
+  // Timer State
+  const [timer, setTimer] = useState(60); 
+  const [canResend, setCanResend] = useState(false);
+
   const inputRefs = useRef([]);
+  const hasFetched = useRef(false);
+
+  // 1. Initial Load
+  useEffect(() => {
+    if (hasFetched.current) return;
+    
+    const email = sessionStorage.getItem('current_employee_email') || 'your registered email';
+    const empId = sessionStorage.getItem('current_employee_id');
+    setUserEmail(email);
+
+    if (empId) {
+      hasFetched.current = true;
+      sendOtp(empId);
+    } else {
+      setStatus('Error: User not identified. Please login again.');
+    }
+  }, []);
+
+  // 2. Countdown Timer Logic
+  useEffect(() => {
+    let interval = null;
+    if (timer > 0) {
+      interval = setInterval(() => {
+        setTimer((prev) => prev - 1);
+      }, 1000);
+    } else {
+      setCanResend(true); // Enable button when timer hits 0
+    }
+    return () => clearInterval(interval);
+  }, [timer]);
+
+  const sendOtp = async (empId) => {
+    setCanResend(false);
+    setTimer(60); // Reset timer to 60 seconds
+    setStatus('Sending new code...');
+
+    try {
+      await fetch('http://127.0.0.1:8000/api/generate-otp/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee_id: empId }),
+      });
+      setStatus('Verification code sent!');
+    } catch (error) {
+      setStatus('Failed to send code.');
+      setCanResend(true); // Allow retry if failed immediately
+    }
+  };
 
   const handleChange = (index, value) => {
-    if (isNaN(value)) return; // Only allow numbers
-
+    if (isNaN(value)) return;
     const newOtp = [...otp];
-    newOtp[index] = value.substring(value.length - 1); // Take last char
+    newOtp[index] = value;
     setOtp(newOtp);
-
-    // Auto-focus next input
     if (value && index < 5) {
       inputRefs.current[index + 1].focus();
     }
   };
 
   const handleKeyDown = (index, e) => {
-    // Backspace logic: move to previous box
     if (e.key === 'Backspace' && !otp[index] && index > 0) {
       inputRefs.current[index - 1].focus();
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const finalOtp = otp.join('');
-    console.log('Identity Verified:', finalOtp);
-    if (onVerifySubmit) onVerifySubmit();
+    const otpCode = otp.join('');
+    const empId = sessionStorage.getItem('current_employee_id');
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/verify-otp/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee_id: empId, otp: otpCode }),
+      });
+
+      if (response.ok) {
+        if (onVerifySubmit) onVerifySubmit();
+      } else {
+        setStatus('Invalid code. Please try again.');
+      }
+    } catch (error) {
+      setStatus('Connection failed.');
+    }
+  };
+
+  const maskEmail = (email) => {
+    if (!email || !email.includes('@')) return email;
+    const [name, domain] = email.split('@');
+    return `${name.substring(0, 2)}***@${domain}`;
   };
 
   return (
     <>
       <div className="card-header">
-        <CheckIcon />
+        <div className="icon-wrapper" style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
+          <div style={{ 
+            fontSize: '40px', 
+            background: '#e0f2fe', 
+            width: '60px', 
+            height: '60px', 
+            borderRadius: '50%', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            color: '#0284c7' 
+          }}>
+            ✔
+          </div>
+        </div>
         <h1 className="title" style={{ marginTop: '10px' }}>Verify your identity</h1>
-        <p className="subtitle">Enter the 6-digit verification code sent to your registered contact</p>
+        
+        <p className="subtitle">
+          Enter the 6-digit verification code sent to <br/>
+          <strong style={{ color: '#333' }}>{maskEmail(userEmail)}</strong>
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="login-form">
-        <div className="form-group">
-          {/* Reusing the same OTP container styles from App.css */}
-          <div className="otp-container">
-            {otp.map((digit, index) => (
-              <input
-                key={index}
-                ref={(el) => (inputRefs.current[index] = el)}
-                type="text"
-                className="otp-input"
-                value={digit}
-                onChange={(e) => handleChange(index, e.target.value)}
-                onKeyDown={(e) => handleKeyDown(index, e)}
-                maxLength={1} 
-              />
-            ))}
-          </div>
+        <div className="otp-container">
+          {otp.map((digit, index) => (
+            <input
+              key={index}
+              ref={(el) => (inputRefs.current[index] = el)}
+              type="text"
+              className="otp-input"
+              maxLength="1"
+              value={digit}
+              onChange={(e) => handleChange(index, e.target.value)}
+              onKeyDown={(e) => handleKeyDown(index, e)}
+            />
+          ))}
         </div>
 
-        <p className="resend-text">
-          Didn't receive the code? <span className="resend-link">Resend</span>
-        </p>
+        {status && <p style={{ color: status.includes('sent') ? 'green' : 'red', fontSize: '14px', textAlign:'center', margin:'10px 0' }}>{status}</p>}
+
+        <div className="resend-container">
+          <span>Didn't receive the code? </span>
+          <button 
+            type="button" 
+            className="link-button" 
+            onClick={() => sendOtp(sessionStorage.getItem('current_employee_id'))}
+            disabled={!canResend}
+            style={{ 
+              cursor: canResend ? 'pointer' : 'not-allowed', 
+              color: canResend ? '#0284c7' : '#999' 
+            }}
+          >
+            {canResend ? "Resend" : `Resend in ${timer}s`}
+          </button>
+        </div>
 
         <button type="submit" className="primary-button">Verify & continue</button>
 
         <div className="footer-action">
-          <button type="button" className="link-button-center" onClick={onBackToLoginClick}>
-            Back to Login
-          </button>
+          <button type="button" className="link-button-center" onClick={onBackToLoginClick}>Back to Login</button>
         </div>
       </form>
     </>

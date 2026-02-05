@@ -12,16 +12,15 @@ const EyeIcon = ({ visible, onClick }) => (
   </svg>
 );
 
-// We added 'onLoginSuccess' prop here
 function Login({ onForgotPasswordClick, onLoginSuccess }) {
   const [formData, setFormData] = useState({
-    username: '',
+    employee_id: '',
     password: '',
     rememberMe: false,
-    verificationMethod: 'both', // Default value
   });
   
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -31,14 +30,33 @@ function Login({ onForgotPasswordClick, onLoginSuccess }) {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Credentials entered:', formData);
-    
-    // LOGIC: Check if username/password are valid (mock logic here)
-    // If valid, trigger the next step:
-    if (onLoginSuccess) {
-      onLoginSuccess(); // This will switch the view in App.jsx
+    setError('');
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/login/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employee_id: formData.employee_id, 
+          password: formData.password
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // UPDATED: Save Email to session storage
+        sessionStorage.setItem('current_employee_id', data.employee_id);
+        sessionStorage.setItem('current_employee_email', data.email); 
+        
+        if (onLoginSuccess) onLoginSuccess();
+      } else {
+        setError(data.error || 'Login failed');
+      }
+    } catch (err) {
+      setError('Connection error. Is backend running?');
     }
   };
 
@@ -46,21 +64,19 @@ function Login({ onForgotPasswordClick, onLoginSuccess }) {
     <>
       <div className="card-header">
         <img src={arrowIcon} alt="Arrow Icon" className="header-icon" />
-        <h1 className="title">
-          Let's get you <span className="highlight">signed</span> in
-        </h1>
+        <h1 className="title">Let's get you <span className="highlight">signed</span> in</h1>
         <p className="subtitle">Pick up where you left off—sign in to continue</p>
       </div>
 
       <form onSubmit={handleSubmit} className="login-form">
         <div className="form-group">
-          <label htmlFor="username">Username</label>
+          <label htmlFor="employee_id">Employee ID</label>
           <input
             type="text"
-            id="username"
-            name="username"
-            placeholder="Enter your employee ID"
-            value={formData.username}
+            id="employee_id"
+            name="employee_id"
+            placeholder="Enter your Employee ID"
+            value={formData.employee_id}
             onChange={handleChange}
             required
           />
@@ -82,37 +98,14 @@ function Login({ onForgotPasswordClick, onLoginSuccess }) {
           </div>
         </div>
 
+        {error && <p style={{ color: 'red', fontSize: '14px', marginBottom:'10px' }}>{error}</p>}
+
         <div className="form-actions">
           <label className="checkbox-label">
-            <input
-              type="checkbox"
-              name="rememberMe"
-              checked={formData.rememberMe}
-              onChange={handleChange}
-            />
+            <input type="checkbox" name="rememberMe" checked={formData.rememberMe} onChange={handleChange} />
             Remember me
           </label>
-          <button type="button" className="link-button" onClick={onForgotPasswordClick}>
-            Forgot password?
-          </button>
-        </div>
-
-        <div className="form-group verification-group">
-          <label>Receive verification code via</label>
-          <div className="radio-options">
-            <label className="radio-label">
-              <input type="radio" name="verificationMethod" value="mobile" checked={formData.verificationMethod === 'mobile'} onChange={handleChange} />
-              Mobile Number
-            </label>
-            <label className="radio-label">
-              <input type="radio" name="verificationMethod" value="email" checked={formData.verificationMethod === 'email'} onChange={handleChange} />
-              Email Address
-            </label>
-            <label className="radio-label">
-              <input type="radio" name="verificationMethod" value="both" checked={formData.verificationMethod === 'both'} onChange={handleChange} />
-              Both
-            </label>
-          </div>
+          <button type="button" className="link-button" onClick={onForgotPasswordClick}>Forgot password?</button>
         </div>
 
         <button type="submit" className="primary-button">Login</button>
